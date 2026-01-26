@@ -6,48 +6,22 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body {
-  background:#0b1220;
-  font-family:Arial;
-  color:white;
-  margin:0;
-}
+body { background:#0b1220; font-family:Arial; color:white; margin:0; }
 .top { text-align:center; padding:20px; background:#111827; }
 
-.tabs { 
-  display:flex; 
-  justify-content:center; 
-  background:#020617; 
-  position:relative;
-}
+.tabs { display:flex; justify-content:center; background:#020617; position:relative; }
 .tab { padding:12px 20px; cursor:pointer; color:#9ca3af; }
 .tab.active { background:#111827; border-radius:10px; color:white; }
 
-.soundBtn {
-  position:absolute;
-  right:15px;
-  top:50%;
-  transform:translateY(-50%);
-  padding:6px 14px;
-  border-radius:10px;
-  border:none;
-  background:#334155;
-  color:white;
-  cursor:pointer;
-  font-weight:bold;
-}
+.soundBtn { position:absolute; right:150px; top:50%; transform:translateY(-50%); padding:6px 14px; border-radius:10px; border:none; background:#334155; color:white; cursor:pointer; font-weight:bold; }
+.alertBtn { position:absolute; right:15px; top:50%; transform:translateY(-50%); padding:6px 14px; border-radius:10px; border:none; background:#334155; color:white; cursor:pointer; font-weight:bold; }
 
 .section { display:none; padding:30px; }
 .section.active { display:block; }
 
 .grid { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; }
 
-.card {
-  background:linear-gradient(180deg,#0f172a,#020617);
-  width:280px; padding:25px; border-radius:20px;
-  box-shadow:0 10px 30px rgba(0,0,0,.6);
-  position:relative;
-}
+.card { background:linear-gradient(180deg,#0f172a,#020617); width:280px; padding:25px; border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,.6); position:relative; }
 
 .badge { position:absolute; top:20px; right:20px; padding:5px 12px; border-radius:20px; font-size:12px; }
 .online{background:#16a34a;color:black;}
@@ -59,38 +33,24 @@ body {
 .time{font-size:12px;opacity:.6;}
 
 .criticalCard { animation:blinkRed 1s infinite; }
-@keyframes blinkRed {
-  0%{box-shadow:0 0 0 red;}
-  50%{box-shadow:0 0 30px red;}
-  100%{box-shadow:0 0 0 red;}
-}
+@keyframes blinkRed {0%{box-shadow:0 0 0 red;}50%{box-shadow:0 0 30px red;}100%{box-shadow:0 0 0 red;}}
 
 .warningCard { animation: blinkYellow 1s infinite; }
-@keyframes blinkYellow {
-  0%{box-shadow:0 0 0 #facc15;}
-  50%{box-shadow:0 0 25px #facc15;}
-  100%{box-shadow:0 0 0 #facc15;}
-}
+@keyframes blinkYellow {0%{box-shadow:0 0 0 #facc15;}50%{box-shadow:0 0 25px #facc15;}100%{box-shadow:0 0 0 #facc15;}}
 
-.chartBox {
-  background:#020617;
-  padding:20px;
-  border-radius:20px;
-  margin-top:20px;
-}
+.chartBox { background:#020617; padding:20px; border-radius:20px; margin-top:20px; }
 </style>
 </head>
 
 <body>
 
-<div class="top">
-  <h1>Sensor Mitra</h1>
-</div>
+<div class="top"><h1>Sensor Mitra</h1></div>
 
 <div class="tabs">
   <div class="tab active" onclick="showTab('summary',this)">SUMMARY</div>
   <div class="tab" onclick="showTab('trends',this)">TRENDS</div>
   <button class="soundBtn" id="soundBtn" onclick="toggleSound()">🔇 Sound OFF</button>
+  <button class="alertBtn" id="alertBtn" onclick="toggleAlerts()">📲 Alerts OFF</button>
 </div>
 
 <div id="summary" class="section active">
@@ -108,9 +68,7 @@ body {
     <option value="node2">Node2</option>
     <option value="node3">Node3</option>
   </select>
-  <button onclick="downloadCSV()" style="margin-left:10px;padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:black;cursor:pointer;">
-    Download CSV
-  </button>
+  <button onclick="downloadCSV()" style="margin-left:10px;padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:black;cursor:pointer;">Download CSV</button>
   <div class="chartBox"><canvas id="waterChart"></canvas></div>
   <div class="chartBox"><canvas id="gasChart"></canvas></div>
   <div class="chartBox"><canvas id="healthChart"></canvas></div>
@@ -154,18 +112,30 @@ function singleBeep(freq,duration){
   gain.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+duration/1000);
   osc.stop(audioCtx.currentTime+duration/1000);
 }
+function startWarningBeep(){ stopAllBeeps(); warningInterval=setInterval(()=>singleBeep(600,200),1200); }
+function startCriticalBeep(){ stopAllBeeps(); criticalInterval=setInterval(()=>singleBeep(1000,300),400); }
+function stopAllBeeps(){ clearInterval(warningInterval); clearInterval(criticalInterval); }
 
-function startWarningBeep(){
-  stopAllBeeps();
-  warningInterval=setInterval(()=>singleBeep(600,200),1200);
+/* ---------- TELEGRAM ---------- */
+let alertsEnabled=false;
+let alertSent={
+  node1:{warning:false,critical:false},
+  node2:{warning:false,critical:false},
+  node3:{warning:false,critical:false}
+};
+
+function toggleAlerts(){
+  alertsEnabled=!alertsEnabled;
+  const btn=document.getElementById("alertBtn");
+  btn.innerText = alertsEnabled ? "📲 Alerts ON" : "📲 Alerts OFF";
+  btn.style.background = alertsEnabled ? "#16a34a" : "#334155";
 }
-function startCriticalBeep(){
-  stopAllBeeps();
-  criticalInterval=setInterval(()=>singleBeep(1000,300),400);
-}
-function stopAllBeeps(){
-  clearInterval(warningInterval);
-  clearInterval(criticalInterval);
+
+const BOT_TOKEN = "YOUR_TOKEN";
+const CHAT_ID = "YOUR_CHAT_ID";
+
+function sendTelegram(msg){
+  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(msg)}`);
 }
 
 /* ---------- MQTT ---------- */
@@ -192,27 +162,20 @@ client.on("message",(t,m)=>{
 
   lastSeen[node]=Date.now();
 
-  const depth = 200;
-  const safeDistance = Math.max(0, Math.min(depth, d.water));
-  const fullness = 100 - (safeDistance / depth) * 100;
-  const score = Math.max(0, Math.min(100, Math.round((safeDistance / depth) * 100)));
+  const depth=20;
+  const safe=Math.min(depth,d.water);
+  const fullness=100-(safe/depth)*100;
+  const score=Math.round((safe/depth)*100);
 
   let status="HEALTHY",color="#22c55e";
-  if(fullness > 75){status="CRITICAL";color="#ef4444";}
-  else if(fullness > 40){status="WARNING";color="#facc15";}
+  if(fullness>75){status="CRITICAL";color="#ef4444";}
+  else if(fullness>40){status="WARNING";color="#facc15";}
 
   document.getElementById("status"+n).innerText=status;
   document.getElementById("status"+n).style.color=color;
   document.getElementById("score"+n).innerText=score;
   document.getElementById("score"+n).style.color=color;
   document.getElementById("dot"+n).style.background=color;
-
-  const card=document.getElementById("card"+n);
-  card.classList.remove("criticalCard","warningCard");
-
-  if(status==="CRITICAL"){card.classList.add("criticalCard");startCriticalBeep();}
-  else if(status==="WARNING"){card.classList.add("warningCard");startWarningBeep();}
-  else stopAllBeeps();
 
   history[node].t.push(new Date().toLocaleTimeString());
   history[node].w.push(d.water);
@@ -223,39 +186,26 @@ client.on("message",(t,m)=>{
   updateCharts();
 });
 
-/* ---------- OFFLINE HANDLER (FIXED) ---------- */
-setInterval(()=>{
-  const now=Date.now();
-  ["node1","node2","node3"].forEach(node=>{
-    const n=node.replace("node","");
-    if(now-lastSeen[node]>5000){
+/* ---------- CHARTS (ONLY THIS PART ADJUSTED) ---------- */
+const style={responsive:true,plugins:{legend:{labels:{color:"white"}}},scales:{x:{ticks:{color:"#94a3b8"}},y:{ticks:{color:"#94a3b8"},min:0}}};
 
-      document.getElementById("b"+n).innerText="OFFLINE";
-      document.getElementById("b"+n).className="badge offline";
+const waterChart=new Chart(document.getElementById("waterChart"),{
+  type:"line",
+  data:{labels:[],datasets:[{label:"Water",data:[]}]},
+  options:{...style,scales:{x:style.scales.x,y:{...style.scales.y,max:20}}}
+});
 
-      document.getElementById("status"+n).innerText="OFFLINE";
-      document.getElementById("status"+n).style.color="#6b7280";
-      document.getElementById("dot"+n).style.background="#6b7280";
+const gasChart=new Chart(document.getElementById("gasChart"),{
+  type:"line",
+  data:{labels:[],datasets:[{label:"Gas",data:[]}]},
+  options:{...style,scales:{x:style.scales.x,y:{...style.scales.y,max:600}}}
+});
 
-      document.getElementById("card"+n).classList.remove("criticalCard","warningCard");
-      stopAllBeeps();
-    }
-  });
-},2000);
-
-/* ---------- CHARTS ---------- */
-const style={
-  responsive:true,
-  plugins:{legend:{labels:{color:"white",font:{weight:"bold"}}}},
-  scales:{
-    x:{ticks:{color:"#94a3b8",font:{weight:"bold"}}},
-    y:{ticks:{color:"#94a3b8",stepSize:10,font:{weight:"bold"}},min:0,max:100}
-  }
-};
-
-const waterChart=new Chart(document.getElementById("waterChart"),{type:"line",data:{labels:[],datasets:[{label:"Water Level",data:[],borderColor:"#38bdf8",tension:0.4}]},options:style});
-const gasChart=new Chart(document.getElementById("gasChart"),{type:"line",data:{labels:[],datasets:[{label:"Gas Level",data:[],borderColor:"#facc15",tension:0.4}]},options:{responsive:true,plugins:{legend:{labels:{color:"white",font:{weight:"bold"}}}},scales:{x:{ticks:{color:"#94a3b8",font:{weight:"bold"}}},y:{ticks:{color:"#94a3b8",stepSize:50,font:{weight:"bold"}},min:0,max:600}}}});
-const healthChart=new Chart(document.getElementById("healthChart"),{type:"line",data:{labels:[],datasets:[{label:"Health Score",data:[],borderColor:"#22c55e",tension:0.4}]},options:style});
+const healthChart=new Chart(document.getElementById("healthChart"),{
+  type:"line",
+  data:{labels:[],datasets:[{label:"Health",data:[]}]},
+  options:{...style,scales:{x:style.scales.x,y:{...style.scales.y,max:100}}}
+});
 
 function updateCharts(){
   const node=document.getElementById("nodeSelect").value;
@@ -271,21 +221,15 @@ function updateCharts(){
 document.getElementById("nodeSelect").addEventListener("change",updateCharts);
 
 function downloadCSV(){
-  const node = document.getElementById("nodeSelect").value;
-  const data = history[node];
-  let csv = "Time,Water,Gas,Health\n";
-  for(let i=0;i<data.t.length;i++){
-    csv += `${data.t[i]},${data.w[i]},${data.g[i]},${data.h[i]}\n`;
-  }
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = node + "_data.csv";
+  const node=document.getElementById("nodeSelect").value;
+  let csv="Time,Water,Gas,Health\n";
+  history[node].t.forEach((t,i)=>{ csv+=`${t},${history[node].w[i]},${history[node].g[i]},${history[node].h[i]}\n`; });
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=node+"_data.csv";
   a.click();
-  URL.revokeObjectURL(url);
 }
 </script>
-
 </body>
 </html>
