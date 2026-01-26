@@ -1,13 +1,17 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
 <title>Sensor Mitra</title>
-
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body { background:#0b1220; font-family:Arial; color:white; margin:0; }
+body {
+  background:#0b1220;
+  font-family:Arial;
+  color:white;
+  margin:0;
+}
 .top { text-align:center; padding:20px; background:#111827; }
 .tabs { display:flex; justify-content:center; background:#020617; }
 .tab { padding:12px 20px; cursor:pointer; color:#9ca3af; }
@@ -35,7 +39,19 @@ body { background:#0b1220; font-family:Arial; color:white; margin:0; }
 .time{font-size:12px;opacity:.6;}
 
 .criticalCard { animation:blinkRed 1s infinite; }
-@keyframes blinkRed {0%{box-shadow:0 0 0 red;}50%{box-shadow:0 0 30px red;}100%{box-shadow:0 0 0 red;}}
+@keyframes blinkRed {
+  0%{box-shadow:0 0 0 red;}
+  50%{box-shadow:0 0 30px red;}
+  100%{box-shadow:0 0 0 red;}
+}
+
+/* ✅ Added warning blink */
+.warningCard { animation: blinkYellow 1s infinite; }
+@keyframes blinkYellow {
+  0%{box-shadow:0 0 0 #facc15;}
+  50%{box-shadow:0 0 25px #facc15;}
+  100%{box-shadow:0 0 0 #facc15;}
+}
 
 .chartBox {
   background:#020617;
@@ -67,17 +83,14 @@ body { background:#0b1220; font-family:Arial; color:white; margin:0; }
 
 <div id="trends" class="section">
   <h2>Node Trends</h2>
-
   <select id="nodeSelect">
     <option value="node1">Node1</option>
     <option value="node2">Node2</option>
     <option value="node3">Node3</option>
   </select>
-
   <button onclick="downloadCSV()" style="margin-left:10px;padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:black;cursor:pointer;">
     Download CSV
   </button>
-
   <div class="chartBox"><canvas id="waterChart"></canvas></div>
   <div class="chartBox"><canvas id="gasChart"></canvas></div>
   <div class="chartBox"><canvas id="healthChart"></canvas></div>
@@ -89,6 +102,20 @@ function showTab(id,el){
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
+}
+
+/* ✅ Sound system added */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playBeep(freq = 800, duration = 200) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.frequency.value = freq;
+  osc.type = "sine";
+  osc.start();
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration/1000);
+  osc.stop(audioCtx.currentTime + duration/1000);
 }
 
 const client = mqtt.connect("wss://f9701c3f73584118b7abd579e55728af.s1.eu.hivemq.cloud:8884/mqtt", {
@@ -129,6 +156,19 @@ client.on("message",(t,m)=>{
   document.getElementById("score"+n).style.color=color;
   document.getElementById("dot"+n).style.background=color;
 
+  /* ✅ Effects added */
+  const card = document.getElementById("card"+n);
+  card.classList.remove("criticalCard","warningCard");
+
+  if(status === "CRITICAL"){
+    card.classList.add("criticalCard");
+    playBeep(1000,300);
+  }
+  else if(status === "WARNING"){
+    card.classList.add("warningCard");
+    playBeep(600,150);
+  }
+
   history[node].t.push(new Date().toLocaleTimeString());
   history[node].w.push(d.water);
   history[node].g.push(d.gas);
@@ -159,20 +199,7 @@ const style={
 };
 
 const waterChart=new Chart(document.getElementById("waterChart"),{type:"line",data:{labels:[],datasets:[{label:"Water Level",data:[],borderColor:"#38bdf8",tension:0.4}]},options:style});
-
-const gasChart=new Chart(document.getElementById("gasChart"),{
-  type:"line",
-  data:{labels:[],datasets:[{label:"Gas Level",data:[],borderColor:"#facc15",tension:0.4}]},
-  options:{
-    responsive:true,
-    plugins:{legend:{labels:{color:"white",font:{weight:"bold"}}}},
-    scales:{
-      x:{ticks:{color:"#94a3b8",font:{weight:"bold"}}},
-      y:{ticks:{color:"#94a3b8",stepSize:50,font:{weight:"bold"}},min:0,max:600}
-    }
-  }
-});
-
+const gasChart=new Chart(document.getElementById("gasChart"),{type:"line",data:{labels:[],datasets:[{label:"Gas Level",data:[],borderColor:"#facc15",tension:0.4}]},options:{responsive:true,plugins:{legend:{labels:{color:"white",font:{weight:"bold"}}}},scales:{x:{ticks:{color:"#94a3b8",font:{weight:"bold"}}},y:{ticks:{color:"#94a3b8",stepSize:50,font:{weight:"bold"}},min:0,max:600}}}});
 const healthChart=new Chart(document.getElementById("healthChart"),{type:"line",data:{labels:[],datasets:[{label:"Health Score",data:[],borderColor:"#22c55e",tension:0.4}]},options:style});
 
 function updateCharts(){
@@ -191,12 +218,10 @@ document.getElementById("nodeSelect").addEventListener("change",updateCharts);
 function downloadCSV(){
   const node = document.getElementById("nodeSelect").value;
   const data = history[node];
-
   let csv = "Time,Water,Gas,Health\n";
   for(let i=0;i<data.t.length;i++){
     csv += `${data.t[i]},${data.w[i]},${data.g[i]},${data.h[i]}\n`;
   }
-
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -206,6 +231,5 @@ function downloadCSV(){
   URL.revokeObjectURL(url);
 }
 </script>
-
 </body>
 </html>
