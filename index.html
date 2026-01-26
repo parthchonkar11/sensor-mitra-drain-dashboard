@@ -35,7 +35,7 @@ body { background:#0b1220; font-family:Arial; color:white; margin:0; }
 .criticalCard { animation:blinkRed 1s infinite; }
 @keyframes blinkRed {0%{box-shadow:0 0 0 red;}50%{box-shadow:0 0 30px red;}100%{box-shadow:0 0 0 red;}}
 
-.warningCard { animation: blinkYellow 1s infinite; }
+.warningCard { animation: blinkYellow 2s infinite; }
 @keyframes blinkYellow {0%{box-shadow:0 0 0 #facc15;}50%{box-shadow:0 0 25px #facc15;}100%{box-shadow:0 0 0 #facc15;}}
 
 .chartBox { background:#020617; padding:20px; border-radius:20px; margin-top:20px; }
@@ -112,7 +112,7 @@ function singleBeep(freq,duration){
   gain.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+duration/1000);
   osc.stop(audioCtx.currentTime+duration/1000);
 }
-function startWarningBeep(){ stopAllBeeps(); warningInterval=setInterval(()=>singleBeep(600,200),1200); }
+function startWarningBeep(){ stopAllBeeps(); warningInterval=setInterval(()=>singleBeep(600,200),2000); }
 function startCriticalBeep(){ stopAllBeeps(); criticalInterval=setInterval(()=>singleBeep(1000,300),400); }
 function stopAllBeeps(){ clearInterval(warningInterval); clearInterval(criticalInterval); }
 
