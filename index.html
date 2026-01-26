@@ -1,0 +1,211 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<title>Sensor Mitra</title>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body { background:#0b1220; font-family:Arial; color:white; margin:0; }
+.top { text-align:center; padding:20px; background:#111827; }
+.tabs { display:flex; justify-content:center; background:#020617; }
+.tab { padding:12px 20px; cursor:pointer; color:#9ca3af; }
+.tab.active { background:#111827; border-radius:10px; color:white; }
+
+.section { display:none; padding:30px; }
+.section.active { display:block; }
+
+.grid { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; }
+
+.card {
+  background:linear-gradient(180deg,#0f172a,#020617);
+  width:280px; padding:25px; border-radius:20px;
+  box-shadow:0 10px 30px rgba(0,0,0,.6);
+  position:relative;
+}
+
+.badge { position:absolute; top:20px; right:20px; padding:5px 12px; border-radius:20px; font-size:12px; }
+.online{background:#16a34a;color:black;}
+.offline{background:#6b7280;}
+
+.dot { width:12px;height:12px;border-radius:50%;margin:0 auto 10px;background:#22c55e;}
+.big{font-size:42px;font-weight:bold;}
+.value{opacity:.85;margin:6px 0;}
+.time{font-size:12px;opacity:.6;}
+
+.criticalCard { animation:blinkRed 1s infinite; }
+@keyframes blinkRed {0%{box-shadow:0 0 0 red;}50%{box-shadow:0 0 30px red;}100%{box-shadow:0 0 0 red;}}
+
+.chartBox {
+  background:#020617;
+  padding:20px;
+  border-radius:20px;
+  margin-top:20px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="top">
+  <h1>Sensor Mitra</h1>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('summary',this)">SUMMARY</div>
+  <div class="tab" onclick="showTab('trends',this)">TRENDS</div>
+</div>
+
+<div id="summary" class="section active">
+  <div class="grid">
+    <div class="card" id="card1"><div class="badge offline" id="b1">OFFLINE</div><h3>Node1</h3><div style="text-align:center"><div class="dot" id="dot1"></div><div class="big" id="score1">--</div><div id="status1">WAITING</div><div class="value">Water: <span id="water1">--</span> cm</div><div class="value">Gas: <span id="gas1">--</span></div><div class="time">Last: <span id="time1">--</span></div></div></div>
+    <div class="card" id="card2"><div class="badge offline" id="b2">OFFLINE</div><h3>Node2</h3><div style="text-align:center"><div class="dot" id="dot2"></div><div class="big" id="score2">--</div><div id="status2">WAITING</div><div class="value">Water: <span id="water2">--</span> cm</div><div class="value">Gas: <span id="gas2">--</span></div><div class="time">Last: <span id="time2">--</span></div></div></div>
+    <div class="card" id="card3"><div class="badge offline" id="b3">OFFLINE</div><h3>Node3</h3><div style="text-align:center"><div class="dot" id="dot3"></div><div class="big" id="score3">--</div><div id="status3">WAITING</div><div class="value">Water: <span id="water3">--</span> cm</div><div class="value">Gas: <span id="gas3">--</span></div><div class="time">Last: <span id="time3">--</span></div></div></div>
+  </div>
+</div>
+
+<div id="trends" class="section">
+  <h2>Node Trends</h2>
+
+  <select id="nodeSelect">
+    <option value="node1">Node1</option>
+    <option value="node2">Node2</option>
+    <option value="node3">Node3</option>
+  </select>
+
+  <button onclick="downloadCSV()" style="margin-left:10px;padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:black;cursor:pointer;">
+    Download CSV
+  </button>
+
+  <div class="chartBox"><canvas id="waterChart"></canvas></div>
+  <div class="chartBox"><canvas id="gasChart"></canvas></div>
+  <div class="chartBox"><canvas id="healthChart"></canvas></div>
+</div>
+
+<script>
+function showTab(id,el){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+const client = mqtt.connect("wss://f9701c3f73584118b7abd579e55728af.s1.eu.hivemq.cloud:8884/mqtt", {
+  username:"Node1234",
+  password:"Node1234"
+});
+
+let lastSeen={node1:0,node2:0,node3:0};
+let history={node1:{t:[],w:[],g:[],h:[]},node2:{t:[],w:[],g:[],h:[]},node3:{t:[],w:[],g:[],h:[]}};
+
+client.on("connect",()=>client.subscribe("smartdrain/#"));
+
+client.on("message",(t,m)=>{
+  const d=JSON.parse(m.toString());
+  const node=d.node.toLowerCase();
+  const n=node.replace("node","");
+
+  document.getElementById("water"+n).innerText=d.water.toFixed(1);
+  document.getElementById("gas"+n).innerText=d.gas;
+  document.getElementById("time"+n).innerText=new Date().toLocaleTimeString();
+  document.getElementById("b"+n).innerText="ONLINE";
+  document.getElementById("b"+n).className="badge online";
+
+  lastSeen[node]=Date.now();
+
+  const depth = 200;
+  const safeDistance = Math.max(0, Math.min(depth, d.water));
+  const fullness = 100 - (safeDistance / depth) * 100;
+  const score = Math.max(0, Math.min(100, Math.round((safeDistance / depth) * 100)));
+
+  let status="HEALTHY",color="#22c55e";
+  if(fullness > 75){status="CRITICAL";color="#ef4444";}
+  else if(fullness > 40){status="WARNING";color="#facc15";}
+
+  document.getElementById("status"+n).innerText=status;
+  document.getElementById("status"+n).style.color=color;
+  document.getElementById("score"+n).innerText=score;
+  document.getElementById("score"+n).style.color=color;
+  document.getElementById("dot"+n).style.background=color;
+
+  history[node].t.push(new Date().toLocaleTimeString());
+  history[node].w.push(d.water);
+  history[node].g.push(d.gas);
+  history[node].h.push(score);
+  if(history[node].t.length>40) ["t","w","g","h"].forEach(k=>history[node][k].shift());
+
+  updateCharts();
+});
+
+setInterval(()=>{
+  const now=Date.now();
+  ["node1","node2","node3"].forEach(node=>{
+    if(now-lastSeen[node]>5000){
+      const n=node.replace("node","");
+      document.getElementById("b"+n).innerText="OFFLINE";
+      document.getElementById("b"+n).className="badge offline";
+    }
+  });
+},2000);
+
+const style={
+  responsive:true,
+  plugins:{legend:{labels:{color:"white",font:{weight:"bold"}}}},
+  scales:{
+    x:{ticks:{color:"#94a3b8",font:{weight:"bold"}}},
+    y:{ticks:{color:"#94a3b8",stepSize:10,font:{weight:"bold"}},min:0,max:100}
+  }
+};
+
+const waterChart=new Chart(document.getElementById("waterChart"),{type:"line",data:{labels:[],datasets:[{label:"Water Level",data:[],borderColor:"#38bdf8",tension:0.4}]},options:style});
+
+const gasChart=new Chart(document.getElementById("gasChart"),{
+  type:"line",
+  data:{labels:[],datasets:[{label:"Gas Level",data:[],borderColor:"#facc15",tension:0.4}]},
+  options:{
+    responsive:true,
+    plugins:{legend:{labels:{color:"white",font:{weight:"bold"}}}},
+    scales:{
+      x:{ticks:{color:"#94a3b8",font:{weight:"bold"}}},
+      y:{ticks:{color:"#94a3b8",stepSize:50,font:{weight:"bold"}},min:0,max:600}
+    }
+  }
+});
+
+const healthChart=new Chart(document.getElementById("healthChart"),{type:"line",data:{labels:[],datasets:[{label:"Health Score",data:[],borderColor:"#22c55e",tension:0.4}]},options:style});
+
+function updateCharts(){
+  const node=document.getElementById("nodeSelect").value;
+  waterChart.data.labels=history[node].t;
+  waterChart.data.datasets[0].data=history[node].w;
+  gasChart.data.labels=history[node].t;
+  gasChart.data.datasets[0].data=history[node].g;
+  healthChart.data.labels=history[node].t;
+  healthChart.data.datasets[0].data=history[node].h;
+  waterChart.update(); gasChart.update(); healthChart.update();
+}
+
+document.getElementById("nodeSelect").addEventListener("change",updateCharts);
+
+function downloadCSV(){
+  const node = document.getElementById("nodeSelect").value;
+  const data = history[node];
+
+  let csv = "Time,Water,Gas,Health\n";
+  for(let i=0;i<data.t.length;i++){
+    csv += `${data.t[i]},${data.w[i]},${data.g[i]},${data.h[i]}\n`;
+  }
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = node + "_data.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>
