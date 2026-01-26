@@ -131,8 +131,8 @@ function toggleAlerts(){
   btn.style.background = alertsEnabled ? "#16a34a" : "#334155";
 }
 
-const BOT_TOKEN = "YOUR_TOKEN";
-const CHAT_ID = "YOUR_CHAT_ID";
+const BOT_TOKEN = "8416816090:AAFwaFRrhX0FD2iGtwSegBJeywEZBGGeA_E";
+const CHAT_ID = "1842148990";
 
 function sendTelegram(msg){
   fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(msg)}`);
@@ -177,6 +177,35 @@ client.on("message",(t,m)=>{
   document.getElementById("score"+n).style.color=color;
   document.getElementById("dot"+n).style.background=color;
 
+  const card=document.getElementById("card"+n);
+  card.classList.remove("criticalCard","warningCard");
+
+  if(status==="CRITICAL"){
+    card.classList.add("criticalCard");
+    startCriticalBeep();
+
+    if(alertsEnabled && !alertSent[node].critical){
+      sendTelegram(`🚨 CRITICAL ALERT\nNode: ${node.toUpperCase()}\nWater: ${d.water} cm\nGas: ${d.gas}`);
+      alertSent[node].critical = true;
+    }
+  }
+
+  else if(status==="WARNING"){
+    card.classList.add("warningCard");
+    startWarningBeep();
+
+    if(alertsEnabled && !alertSent[node].warning){
+      sendTelegram(`⚠️ WARNING ALERT\nNode: ${node.toUpperCase()}\nWater: ${d.water} cm\nGas: ${d.gas}`);
+      alertSent[node].warning = true;
+    }
+  }
+
+  else {
+    stopAllBeeps();
+    alertSent[node].warning = false;
+    alertSent[node].critical = false;
+  }
+
   history[node].t.push(new Date().toLocaleTimeString());
   history[node].w.push(d.water);
   history[node].g.push(d.gas);
@@ -186,25 +215,49 @@ client.on("message",(t,m)=>{
   updateCharts();
 });
 
-/* ---------- CHARTS (ONLY THIS PART ADJUSTED) ---------- */
-const style={responsive:true,plugins:{legend:{labels:{color:"white"}}},scales:{x:{ticks:{color:"#94a3b8"}},y:{ticks:{color:"#94a3b8"},min:0}}};
+/* ---------- OFFLINE ---------- */
+setInterval(()=>{
+  const now=Date.now();
+  ["node1","node2","node3"].forEach(node=>{
+    const n=node.replace("node","");
+    if(now-lastSeen[node]>5000){
+      document.getElementById("b"+n).innerText="OFFLINE";
+      document.getElementById("b"+n).className="badge offline";
+      document.getElementById("status"+n).innerText="OFFLINE";
+      document.getElementById("status"+n).style.color="#6b7280";
+      document.getElementById("dot"+n).style.background="#6b7280";
+      document.getElementById("card"+n).classList.remove("criticalCard","warningCard");
+      stopAllBeeps();
+    }
+  });
+},2000);
+
+/* ---------- CHARTS ---------- */
+const waterStyle={responsive:true,plugins:{legend:{labels:{color:"white"}}},
+  scales:{x:{ticks:{color:"#94a3b8"}},y:{ticks:{color:"#94a3b8"},min:0,max:20}}};
+
+const gasStyle={responsive:true,plugins:{legend:{labels:{color:"white"}}},
+  scales:{x:{ticks:{color:"#94a3b8"}},y:{ticks:{color:"#94a3b8"},min:0,max:600}}};
+
+const healthStyle={responsive:true,plugins:{legend:{labels:{color:"white"}}},
+  scales:{x:{ticks:{color:"#94a3b8"}},y:{ticks:{color:"#94a3b8"},min:0,max:100}}};
 
 const waterChart=new Chart(document.getElementById("waterChart"),{
   type:"line",
   data:{labels:[],datasets:[{label:"Water",data:[]}]},
-  options:{...style,scales:{x:style.scales.x,y:{...style.scales.y,max:20}}}
+  options:waterStyle
 });
 
 const gasChart=new Chart(document.getElementById("gasChart"),{
   type:"line",
   data:{labels:[],datasets:[{label:"Gas",data:[]}]},
-  options:{...style,scales:{x:style.scales.x,y:{...style.scales.y,max:600}}}
+  options:gasStyle
 });
 
 const healthChart=new Chart(document.getElementById("healthChart"),{
   type:"line",
   data:{labels:[],datasets:[{label:"Health",data:[]}]},
-  options:{...style,scales:{x:style.scales.x,y:{...style.scales.y,max:100}}}
+  options:healthStyle
 });
 
 function updateCharts(){
