@@ -45,7 +45,6 @@ body {
   100%{box-shadow:0 0 0 red;}
 }
 
-/* ✅ Added warning blink */
 .warningCard { animation: blinkYellow 1s infinite; }
 @keyframes blinkYellow {
   0%{box-shadow:0 0 0 #facc15;}
@@ -66,6 +65,13 @@ body {
 
 <div class="top">
   <h1>Sensor Mitra</h1>
+</div>
+
+<!-- ✅ Added sound enable button -->
+<div style="text-align:center;margin:10px;">
+  <button onclick="enableSound()" style="padding:10px 20px;border-radius:10px;border:none;background:#16a34a;font-weight:bold;cursor:pointer;">
+    🔔 Enable Sound Alerts
+  </button>
 </div>
 
 <div class="tabs">
@@ -104,9 +110,17 @@ function showTab(id,el){
   el.classList.add('active');
 }
 
-/* ✅ Sound system added */
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+/* ✅ FIXED SOUND SYSTEM */
+let audioCtx = null;
+
+function enableSound(){
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  alert("Sound enabled ✅ Alerts will now work");
+}
+
 function playBeep(freq = 800, duration = 200) {
+  if(!audioCtx) return;   // prevents error before enabling
+
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   osc.connect(gain);
@@ -156,7 +170,6 @@ client.on("message",(t,m)=>{
   document.getElementById("score"+n).style.color=color;
   document.getElementById("dot"+n).style.background=color;
 
-  /* ✅ Effects added */
   const card = document.getElementById("card"+n);
   card.classList.remove("criticalCard","warningCard");
 
