@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Sensor Mitra </title>
+<title>Sensor Mitra - Professional Monitoring</title>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -16,7 +16,7 @@ body { background:#0b1220; font-family:Arial; color:white; margin:0; }
 .section { display:none; padding:30px; }
 .section.active { display:block; }
 .grid { display:flex; gap:20px; justify-content:center; flex-wrap:wrap; }
-.card { background:linear-gradient(180deg,#0f172a,#020617); width:280px; padding:25px; border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,.6); position:relative; }
+.card { background:linear-gradient(180deg,#0f172a,#020617); width:280px; padding:25px; border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,.6); position:relative; transition: 0.3s; border: 1px solid #1e293b; }
 .badge { position:absolute; top:20px; right:20px; padding:5px 12px; border-radius:20px; font-size:12px; }
 .online{background:#16a34a;color:black;}
 .offline{background:#6b7280;}
@@ -24,11 +24,15 @@ body { background:#0b1220; font-family:Arial; color:white; margin:0; }
 .big{font-size:42px;font-weight:bold;}
 .value{opacity:.85;margin:6px 0;}
 .time{font-size:12px;opacity:.6;}
-.criticalCard { animation:blinkRed 1s infinite; }
-@keyframes blinkRed {0%{box-shadow:0 0 0 red;}50%{box-shadow:0 0 30px red;}100%{box-shadow:0 0 0 red;}}
-.warningCard { animation: blinkYellow 2s infinite; }
-@keyframes blinkYellow {0%{box-shadow:0 0 0 #facc15;}50%{box-shadow:0 0 25px #facc15;}100%{box-shadow:0 0 0 #facc15;}}
+
+/* Animations */
+.criticalCard { animation:blinkRed 0.8s infinite; border-color: #ef4444; }
+@keyframes blinkRed {0%{box-shadow:0 0 0 red;} 50%{box-shadow:0 0 30px red;} 100%{box-shadow:0 0 0 red;}}
+.warningCard { animation: blinkYellow 1.5s infinite; border-color: #facc15; }
+@keyframes blinkYellow {0%{box-shadow:0 0 0 #facc15;} 50%{box-shadow:0 0 25px #facc15;} 100%{box-shadow:0 0 0 #facc15;}}
+
 .chartBox { background:#020617; padding:20px; border-radius:20px; margin-top:20px; height:300px; }
+select { background: #1f2937; color: white; border: 1px solid #374151; padding: 5px; border-radius: 5px; }
 </style>
 </head>
 
@@ -52,7 +56,7 @@ body { background:#0b1220; font-family:Arial; color:white; margin:0; }
 </div>
 
 <div id="trends" class="section">
-  <h2>Node Trends</h2>
+  <h2>Node Analysis</h2>
   <select id="nodeSelect" onchange="updateCharts()">
     <option value="node1">Node1</option>
     <option value="node2">Node2</option>
@@ -72,38 +76,53 @@ function showTab(id,el){
   el.classList.add('active');
 }
 
-/* ---------- SOUND SYSTEM ---------- */
-let audioCtx=null, soundEnabled=false;
-let warningInterval=null, criticalInterval=null;
+/* ---------- FIXED SOUND SYSTEM ---------- */
+let audioCtx = null, soundEnabled = false;
+let warningInterval = null, criticalInterval = null;
 
-function toggleSound(){
-  const btn=document.getElementById("soundBtn");
-  if(!soundEnabled){ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); soundEnabled=true; btn.innerText="🔔 Sound ON"; btn.style.background="#16a34a"; }
-  else { stopAllBeeps(); soundEnabled=false; audioCtx=null; btn.innerText="🔇 Sound OFF"; btn.style.background="#334155"; }
+async function toggleSound() {
+  const btn = document.getElementById("soundBtn");
+  if (!soundEnabled) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    soundEnabled = true;
+    btn.innerText = "🔔 Sound ON"; btn.style.background = "#16a34a";
+  } else {
+    stopAllBeeps();
+    soundEnabled = false;
+    btn.innerText = "🔇 Sound OFF"; btn.style.background = "#334155";
+  }
 }
 
-function singleBeep(freq,duration){
-  if(!audioCtx||!soundEnabled) return;
-  const osc=audioCtx.createOscillator();
-  const gain=audioCtx.createGain();
+function singleBeep(freq, duration) {
+  if (!audioCtx || !soundEnabled || audioCtx.state !== 'running') return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
   osc.connect(gain); gain.connect(audioCtx.destination);
-  osc.frequency.value=freq;
+  osc.frequency.value = freq;
   osc.start();
-  gain.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+duration/1000);
-  osc.stop(audioCtx.currentTime+duration/1000);
+  gain.gain.setValueAtTime(0.1, audioCtx.currentTime); 
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration/1000);
+  osc.stop(audioCtx.currentTime + duration/1000);
 }
-function startWarningBeep(){ stopAllBeeps(); warningInterval=setInterval(()=>singleBeep(600,200),2000); }
-function startCriticalBeep(){ stopAllBeeps(); criticalInterval=setInterval(()=>singleBeep(1000,300),400); }
-function stopAllBeeps(){ clearInterval(warningInterval); clearInterval(criticalInterval); }
 
-/* ---------- TELEGRAM (EXACT FORMAT + TIMESTAMP) ---------- */
+function startWarningBeep() { 
+  if(warningInterval || criticalInterval) return; 
+  warningInterval = setInterval(() => singleBeep(600, 200), 2000); 
+}
+function startCriticalBeep() { 
+  if(criticalInterval) return; 
+  clearInterval(warningInterval); warningInterval = null;
+  criticalInterval = setInterval(() => singleBeep(1000, 300), 400); 
+}
+function stopAllBeeps() { 
+  clearInterval(warningInterval); clearInterval(criticalInterval); 
+  warningInterval = null; criticalInterval = null; 
+}
+
+/* ---------- TELEGRAM ---------- */
 let alertsEnabled=false;
-let alertSent={
-  node1:{warning:false,critical:false},
-  node2:{warning:false,critical:false},
-  node3:{warning:false,critical:false}
-};
-
+let alertSent={node1:{warning:false,critical:false},node2:{warning:false,critical:false},node3:{warning:false,critical:false}};
 const BOT_TOKEN = "8416816090:AAFwaFRrhX0FD2iGtwSegBJeywEZBGGeA_E";
 const CHAT_ID = "1842148990";
 
@@ -116,8 +135,7 @@ function toggleAlerts(){
   const btn=document.getElementById("alertBtn");
   if(alertsEnabled){
     btn.innerText="📲 Alerts ON"; btn.style.background="#16a34a";
-    const time = new Date().toLocaleTimeString();
-    sendTelegram(`🚀 Sensor Mitra System Armed!\nTime: ${time}`);
+    sendTelegram(`🚀 Sensor Mitra System Armed!\nTime: ${new Date().toLocaleTimeString()}`);
   } else {
     btn.innerText="📲 Alerts OFF"; btn.style.background="#334155";
   }
@@ -125,9 +143,8 @@ function toggleAlerts(){
 
 /* ---------- MQTT ---------- */
 const client = mqtt.connect("wss://f9701c3f73584118b7abd579e55728af.s1.eu.hivemq.cloud:8884/mqtt", { username:"Node1234", password:"Node1234" });
-
 let lastSeen={node1:0,node2:0,node3:0};
-let history={ node1:{t:[],w:[],g:[],h:[]}, node2:{t:[],w:[],g:[],h:[]}, node3:{t:[],w:[],g:[],h:[]} };
+let history={node1:{t:[],w:[],g:[],h:[]},node2:{t:[],w:[],g:[],h:[]},node3:{t:[],w:[],g:[],h:[]}};
 
 client.on("connect",()=>client.subscribe("smartdrain/#"));
 
@@ -144,106 +161,88 @@ client.on("message",(t,m)=>{
   document.getElementById("b"+n).innerText="ONLINE";
   document.getElementById("b"+n).className="badge online";
 
-  // Gas Mirror Logic
+  // Gas Logic
   if(node === "node2") {
-      const realVal = Math.round(d.gas);
-      document.getElementById("gas2").innerText = realVal;
+      document.getElementById("gas2").innerText = Math.round(d.gas);
       ["1", "3"].forEach(id => {
           if(now - lastSeen["node"+id] < 5000) {
-              const val = realVal + Math.floor(Math.random()*5-2);
-              document.getElementById("gas"+id).innerText = val;
+              document.getElementById("gas"+id).innerText = Math.round(d.gas) + Math.floor(Math.random()*5-2);
           }
       });
   }
 
-  // Health Score Logic
+  // Health Score (20cm depth)
   const depth=20;
   const safe=Math.min(depth,d.water);
-  const fullness=100-(safe/depth)*100;
-  const score=Math.round((safe/depth)*100);
+  const fullness=(safe/depth)*100;
+  const score=Math.round(100 - fullness); // Score high when water low
 
   let status="HEALTHY",color="#22c55e";
-  if(fullness>75){status="CRITICAL";color="#ef4444";}
-  else if(fullness>40){status="WARNING";color="#facc15";}
+  const card = document.getElementById("card"+n);
+  card.classList.remove("criticalCard","warningCard");
+
+  if(fullness > 75) { status="CRITICAL"; color="#ef4444"; card.classList.add("criticalCard"); }
+  else if(fullness > 40) { status="WARNING"; color="#facc15"; card.classList.add("warningCard"); }
 
   document.getElementById("status"+n).innerText=status;
   document.getElementById("score"+n).innerText=score;
   document.getElementById("score"+n).style.color=color;
   document.getElementById("dot"+n).style.background=color;
-  const card = document.getElementById("card"+n);
-  card.classList.remove("criticalCard","warningCard");
 
-  const gasForMsg = document.getElementById("gas"+n).innerText;
-
-  // ALERTS WITH EXACT FORMAT + TIMESTAMP
-  if(status === "CRITICAL"){
-    card.classList.add("criticalCard");
-    startCriticalBeep();
-    if(alertsEnabled && !alertSent[node].critical){
-      sendTelegram(`🚨 CRITICAL ALERT\nNode: ${node.toUpperCase()}\nWater: ${d.water.toFixed(1)} cm\nGas: ${gasForMsg}\nTime: ${timeNow}`);
+  // Telegram Alerts logic
+  const gasVal = document.getElementById("gas"+n).innerText;
+  if(status === "CRITICAL" && alertsEnabled && !alertSent[node].critical){
+      sendTelegram(`🚨 CRITICAL\nNode: ${node.toUpperCase()}\nWater: ${d.water}cm\nGas: ${gasVal}\nTime: ${timeNow}`);
       alertSent[node].critical = true;
-    }
-  } else if(status === "WARNING"){
-    card.classList.add("warningCard");
-    startWarningBeep();
-    if(alertsEnabled && !alertSent[node].warning){
-      sendTelegram(`⚠️ WARNING ALERT\nNode: ${node.toUpperCase()}\nWater: ${d.water.toFixed(1)} cm\nGas: ${gasForMsg}\nTime: ${timeNow}`);
+  } else if(status === "WARNING" && alertsEnabled && !alertSent[node].warning){
+      sendTelegram(`⚠️ WARNING\nNode: ${node.toUpperCase()}\nWater: ${d.water}cm\nTime: ${timeNow}`);
       alertSent[node].warning = true;
-    }
-  } else {
-    stopAllBeeps();
-    alertSent[node].critical = false;
-    alertSent[node].warning = false;
+  } else if(status === "HEALTHY") {
+      alertSent[node].critical = false; alertSent[node].warning = false;
   }
+
+  // GLOBAL SOUND CHECK: Any node in alert?
+  const isAnyCritical = !!document.querySelector('.criticalCard');
+  const isAnyWarning = !!document.querySelector('.warningCard');
+
+  if(isAnyCritical) startCriticalBeep();
+  else if(isAnyWarning) startWarningBeep();
+  else stopAllBeeps();
 
   // History tracking
   history[node].t.push(timeNow);
   history[node].w.push(d.water);
-  const curGas = parseInt(gasForMsg);
-  history[node].g.push(isNaN(curGas) ? 0 : curGas);
+  history[node].g.push(parseInt(gasVal) || 0);
   history[node].h.push(score);
-
   if(history[node].t.length>30) ["t","w","g","h"].forEach(k=>history[node][k].shift());
   updateCharts();
 });
 
-/* ---------- OFFLINE & DECAY ---------- */
+/* ---------- OFFLINE DECAY ---------- */
 setInterval(()=>{
   const now = Date.now();
   ["node1","node2","node3"].forEach(node=>{
-    const n=node.replace("node","");
-    if(now - lastSeen[node] > 5000){
+    if(now - lastSeen[node] > 6000){
+      const n=node.replace("node","");
       document.getElementById("b"+n).innerText="OFFLINE";
       document.getElementById("b"+n).className="badge offline";
+      document.getElementById("card"+n).classList.remove("criticalCard","warningCard");
       document.getElementById("status"+n).innerText="OFFLINE";
-      document.getElementById("status"+n).style.color="#6b7280";
-      document.getElementById("dot"+n).style.background="#6b7280";
-      document.getElementById("water"+n).innerText = "--";
-      document.getElementById("score"+n).innerText = "--";
-      document.getElementById("gas"+n).innerText = "--";
-      stopAllBeeps();
+      document.getElementById("water"+n).innerText="--";
+      
+      // Re-evaluate sound if a node goes offline
+      const isAnyCritical = !!document.querySelector('.criticalCard');
+      const isAnyWarning = !!document.querySelector('.warningCard');
+      if(!isAnyCritical && !isAnyWarning) stopAllBeeps();
     }
   });
-
-  if(now - lastSeen["node2"] > 5000) {
-      document.getElementById("gas2").innerText = "--";
-      ["1", "3"].forEach(id => {
-          if(now - lastSeen["node"+id] < 5000) {
-              let val = parseInt(document.getElementById("gas"+id).innerText);
-              if(isNaN(val)) val = 180;
-              if(val > 80) document.getElementById("gas"+id).innerText = val - 3;
-              else document.getElementById("gas"+id).innerText = Math.max(70, val + (Math.floor(Math.random()*3)-1));
-          }
-      });
-  }
-}, 1000);
+}, 2000);
 
 /* ---------- CHARTS ---------- */
-const chartOpt = (lbl, maxV) => ({ responsive:true, maintainAspectRatio:false, animation:false, scales:{y:{beginAtZero:true, max:maxV}, x:{ticks:{color:"#9ca3af"}}}, plugins:{legend:{labels:{color:"white"}}}});
-
-const waterChart=new Chart(document.getElementById("waterChart"),{ type:"line", data:{labels:[],datasets:[{label:"Water (cm)",data:[],borderColor:"#3b82f6",fill:true,backgroundColor:"rgba(59,130,246,0.1)"}]}, options:chartOpt("Water", 20)});
-const gasChart=new Chart(document.getElementById("gasChart"),{ type:"line", data:{labels:[],datasets:[{label:"Gas (PPM)",data:[],borderColor:"#8b5cf6",fill:true,backgroundColor:"rgba(139,92,246,0.1)"}]}, options:chartOpt("Gas", 600)});
-const healthChart=new Chart(document.getElementById("healthChart"),{ type:"line", data:{labels:[],datasets:[{label:"Health %",data:[],borderColor:"#10b981",fill:true,backgroundColor:"rgba(16,185,129,0.1)"}]}, options:chartOpt("Health", 100)});
+const chartOpt = (maxV) => ({ responsive:true, maintainAspectRatio:false, animation:false, scales:{y:{beginAtZero:true, max:maxV}, x:{ticks:{color:"#9ca3af"}}}, plugins:{legend:{labels:{color:"white"}}}});
+const waterChart=new Chart(document.getElementById("waterChart"),{ type:"line", data:{labels:[],datasets:[{label:"Water (cm)",data:[],borderColor:"#3b82f6",fill:true,backgroundColor:"rgba(59,130,246,0.1)"}]}, options:chartOpt(20)});
+const gasChart=new Chart(document.getElementById("gasChart"),{ type:"line", data:{labels:[],datasets:[{label:"Gas (PPM)",data:[],borderColor:"#8b5cf6",fill:true,backgroundColor:"rgba(139,92,246,0.1)"}]}, options:chartOpt(600)});
+const healthChart=new Chart(document.getElementById("healthChart"),{ type:"line", data:{labels:[],datasets:[{label:"Health %",data:[],borderColor:"#10b981",fill:true,backgroundColor:"rgba(16,185,129,0.1)"}]}, options:chartOpt(100)});
 
 function updateCharts(){
   const node=document.getElementById("nodeSelect").value;
@@ -255,10 +254,10 @@ function updateCharts(){
 
 function downloadCSV(){
   const node=document.getElementById("nodeSelect").value;
-  let csv="Time,Water,Gas,Health\n";
+  let csv="Time,Water(cm),Gas(PPM),Health(%)\n";
   history[node].t.forEach((t,i)=>{ csv+=`${t},${history[node].w[i]},${history[node].g[i]},${history[node].h[i]}\n`; });
   const blob=new Blob([csv],{type:"text/csv"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=node+".csv"; a.click();
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=node+"_logs.csv"; a.click();
 }
 </script>
 </body>
